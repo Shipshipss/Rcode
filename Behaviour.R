@@ -90,16 +90,10 @@ sub_wide <- sub_number %>%
 # Diff --------------------------------------------------------------------
 
 #All diff on each adjacent time point —— diff 
-Diff <- setorderv(rawdata,'Session') %>% 
+diff <- setorderv(rawdata,'Session') %>% 
   .[,paste('Δ',vars,sep = ''):= map(.SD,\(x) x - shift(x) ),
     by = Number,.SDcols = vars]
 
-diff.vars <- Diff %>% 
-  names() %>% 
-  str_subset('Δ')
-
-# get diff value session == 5 get 4&5 difference
-dance_diff <- Diff['post_dance',.SD,.SDcols = c(con.vars,diff.vars),on = 'Label']
 
 # Correlation ---------------------------------------------------------------------
 #corrplot variable order
@@ -188,7 +182,7 @@ Quarantine %$%
 
 
 # Dance -------------------------------------------------------------------
-p_load(corrplot,broom,rstatix,ggpackets,broom.mixed,ggeffects)
+p_load(corrplot,broom,rstatix,ggpackets,broom.mixed,ggeffects,gtsummary)
 
 # need set key on time column
 # which contain t1 and t2 value
@@ -230,10 +224,10 @@ myresult[,data := map2(t1,t2,\(x,y) rawdata[c(x,y),on = 'Label'])][
                Quarantine := map(data,~my_lme(.,Qvars)),on = 'label'][
                  
                  'release',
-                 `:=`(c('lme_result', 't_table'), 
+                 `:=`(c('lme_result'), 
                       {
-                        lme_result := map2(data,var,my_lme)
-                        .(lme_result,)
+                        lme_result = map2(data,var,my_lme)
+                        .(lme_result)
                       })
                  , on = 'label']
 
