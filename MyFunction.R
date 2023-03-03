@@ -205,7 +205,6 @@ my_t_table <- function(data) {
                      statistic = list(all_continuous() ~ '{mean} ({sd})')) %>% 
     add_stat(fns = everything() ~ tbl_ttest) %>%
     add_q() %>%  bold_p(q = T) %>% add_significance_stars() %>% 
-    modify_spanning_header(all_stat_cols() ~ "**Dance Intervention**") %>% 
     modify_header(list(statistic ~ "**t-statistic**",p.value ~ "**p-value**")) %>%
     modify_fmt_fun(list(statistic ~ style_sigfig,p.value ~ style_pvalue) ) 
   #as_flex_table() 

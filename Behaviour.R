@@ -99,20 +99,14 @@ diff <- setorderv(rawdata,'Session') %>%
 #corrplot variable order
 
 # need to convert Gender variable to numeric class before calculation of corr 
-order <- c(5,6,7,8,15,16,17,18,3,4,9,10,11,12,13,14,19,20,21,22,23,24,1,2,25)
-Qdiff %<>% .[,!c('ΔSES','Number')] %>% 
+
   setnames(c('ΔGSES','ΔRSES','ΔSES_em','ΔExtraversion',
              'ΔEmotionality','ΔOCEAN','ΔAttitude','ΔACIPS'),
-           c('ΔGSE','ΔRSE','ΔSES','ΔExt','ΔEmo','ΔB5','ΔAtt','ΔACI')) %>% 
-  .[,..order]
+           c('ΔGSE','ΔRSE','ΔSES','ΔExt','ΔEmo','ΔB5','ΔAtt','ΔACI'))
 
 
 
-#pcor
-D.pcor <- partial.r(dance_diff,c(diff.vars),con.vars)
-pcor.t <- corr.p(D.pcor,n =16) #n - s 
-# corr.p may be applied to the results of partial.r if n is set to n - s 
-# (where s is the number of variables partialed out)
+
 D.pcorplot <- corrplot(D.pcor,p.mat = pcor.t$p,
                        method="square", type = 'l',
                        insig = 'blank',
@@ -238,10 +232,11 @@ set_dtlist_name(myresult,'label')
 
 
 my_boxplot <- function(label) {
+  
   myresult[label,ttest_result,on = 'label'] %>% unlist(recursive = F) %$%  # magrittr:: Expose the names in lhs to the rhs expression
     {                       # %$% pass on to all layers using {}
       
-      ggplot(longdata[sig.vars.fdr],aes(Session,value))+
+      ggplot(longdata[sig.vars.fdr],aes(Label,value))+
         #Do not need D_ttest$t_data,if use %$%
         
         pack_geom_box(line.mapping = aes(group = Number),
@@ -256,12 +251,13 @@ my_boxplot <- function(label) {
         # pack_scale(all.labels = c(timelabel),
         #            fill.palette = 'Set1')+
         theme_bw()+theme(axis.title = element_blank())+
-        labs(title = 'Significant variable PLOT on paired t-test',
-             subtitle = 'N = 19 (F:10 / M:9)')+
+    #    labs(title = 'Significant variable PLOT on paired t-test',
+    #         subtitle = 'N = 19 (F:10 / M:9)')+
         pack_theme(theme.legend.position='none')
     }
   
 }
+
 
 
 
