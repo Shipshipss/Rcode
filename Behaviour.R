@@ -76,7 +76,7 @@ subject <- rawdata[,.(sub = .(Number)),by = .(Label,Gender)][,.SD,Gender][
                    list( setdiff(y, x), #quit
                          intersect(x, y), #same
                          setdiff(x, y)) )),by = Gender] 
-
+#dad
 
 rawdata %>% 
   group_by(Gender, Session) %>%
