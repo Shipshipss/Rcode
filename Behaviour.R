@@ -75,7 +75,16 @@ subject <- rawdata[,.(sub = .(Number)),by = .(Label,Gender)][,.SD,Gender][
     transpose(map2(sub,dplyr::lag(sub),\(x,y)
                    list( setdiff(y, x), #quit
                          intersect(x, y), #same
-                         setdiff(x, y)) ))] 
+                         setdiff(x, y)) )),by = Gender] 
+
+
+rawdata %>% 
+  group_by(Gender, Session) %>%
+  summarise(sub = list(Number)) %>%
+  group_by(Gender) %>%
+  mutate(quit = map2(sub, dplyr::lag(sub), ~ setdiff(.y, .x)),
+         same = map2(sub, dplyr::lag(sub), ~ intersect(.x, .y)),
+         newadd = map2(sub, dplyr::lag(sub), ~ setdiff(.x, .y))) 
 
 
 
@@ -240,14 +249,14 @@ my_boxplot <- function(label) {
         #Do not need D_ttest$t_data,if use %$%
         
         pack_geom_box(line.mapping = aes(group = Number),
-                      box.mapping = aes(fill = Session)) %+% #ggplot:: expose
+                      box.mapping = aes(fill = Label)) %+% #ggplot:: expose
         pack_sig(text.data = stat.test[sig.vars.fdr], 
                  #dont need to D_ttest$t_test,if use %$%
                  
-                 text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.fdr)))+
+                 text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.adj)))+
         facet_wrap(~vars,scales = 'free_y')+
-        scale_x_discrete(labels = timelabel)+
-        scale_fill_brewer(palette = 'Set1',labels = timelabel)+
+    #    scale_x_discrete(labels = timelabel)+
+    #    scale_fill_brewer(palette = 'Set1',labels = timelabel)+
         # pack_scale(all.labels = c(timelabel),
         #            fill.palette = 'Set1')+
         theme_bw()+theme(axis.title = element_blank())+
@@ -261,6 +270,7 @@ my_boxplot <- function(label) {
 
 
 
+save_as_docx(path = "C:/Users/Ship/R")
 
 
 
@@ -274,11 +284,7 @@ Med <- PROCESS(dance_diff,y = 'ΔExtraversion',x = 'ΔSAQ',
 Mod <- PROCESS(rawdata['4'],y = 'BDI',x = 'SES',
                mods=c('RSES'),covs = c('Age','Gender','Present'))
 
-# paper  ------------------------------------------------------------------
 
-
-
-save_as_docx(path = "C:/Users/Ship/R")
 
 # test --------------------------------------------------------------------
 
