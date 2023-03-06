@@ -76,7 +76,7 @@ subject <- rawdata[,.(sub = .(Number)),by = .(Label,Gender)][,.SD,Gender][
                    list( setdiff(y, x), #quit
                          intersect(x, y), #same
                          setdiff(x, y)) )),by = Gender] 
-#dad
+
 
 rawdata %>% 
   group_by(Gender, Session) %>%
@@ -324,6 +324,3 @@ adj.plot<- ggplot(tileplot,aes(x = vars,y = method,fill = sig))+
          axis.text.x = element_text(size = 12))
 
 
-#gjhgg
-
-#sfes
