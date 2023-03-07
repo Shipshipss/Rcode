@@ -351,7 +351,6 @@ doc <- body_add_flextable(doc, table2)
 # 保存Word文档
 print(doc, target = "mytables.docx")
 
-#
 
 
 library(flextable)
