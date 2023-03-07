@@ -78,7 +78,7 @@ subject <- rawdata[,.(number = .(Number)),by = .(Label,Gender)][,.SD,Gender][
                    list( setdiff(y, x), #quit
                          intersect(x, y), #same
                          setdiff(x, y)) )),by = Gender] 
-#dad
+
 
 rawdata %>% 
   group_by(Gender, Session) %>%
@@ -326,6 +326,7 @@ adj.plot<- ggplot(tileplot,aes(x = vars,y = method,fill = sig))+
          axis.text.x = element_text(size = 12))
 
 
+
 (testtable <- rawdata %>% 
   select(Label,Gender) %>% 
   tbl_summary(by = Label))
@@ -378,4 +379,5 @@ for (i in seq_along(table_titles)) {
 
 # 保存文档
 print(doc, target = "output.docx")
+
 
