@@ -40,8 +40,10 @@ rawdata <- import('D_YH_Behavior.xlsx',sheet='rawdata',as = 'dt')[
   # if LHS has multiple col names , should add ()
   , (fac.vars):= lapply(.SD,as.factor),.SDcols = fac.vars][
     ,Gender:=fct_recode(Gender,'Male' = '1','Female'= '2')][
-      .(Session = as.character(1:5) ,to = c('base','pre_Q','post_Q','pre_dance','post_dance')),
-      on = 'Session',Label := i.to ]
+      .(Session = as.factor(1:5) ,to = c('base','pre_Q','post_Q','pre_dance','post_dance')),
+      on = 'Session',Label := i.to ][,Label:=factor(Label,levels = c('base','pre_Q','post_Q','pre_dance','post_dance'))]
+                                     
+                                     
 
 # get present
 Attendance <- rawdata[,.(Number,Attendance)] %>% na.omit()
@@ -70,9 +72,9 @@ lut_list  <- list(
 
 # subject -----------------------------------------------------------------
 
-subject <- rawdata[,.(sub = .(Number)),by = .(Label,Gender)][,.SD,Gender][
-  , c("quit", "same", "newadd"):=
-    transpose(map2(sub,dplyr::lag(sub),\(x,y)
+subject <- rawdata[,.(number = .(Number)),by = .(Label,Gender)][,.SD,Gender][
+  , c("quit", "keep", "newadd"):=
+    transpose(map2(number,dplyr::lag(number),\(x,y)
                    list( setdiff(y, x), #quit
                          intersect(x, y), #same
                          setdiff(x, y)) )),by = Gender] 
@@ -88,7 +90,7 @@ rawdata %>%
 
 
 
-sub_number <- subject[ ,map(.SD,\(x) map_int(x,length)),by = .(Label,Gender)]
+(sub_number <- subject[ ,map(.SD,\(x) map_int(x,length)),by = .(Label,Gender)])
 
 sub_wide <- sub_number %>% 
   dcast(Label ~ Gender,value.var = 'sub') %>% 
@@ -101,7 +103,7 @@ sub_wide <- sub_number %>%
 #All diff on each adjacent time point —— diff 
 diff <- setorderv(rawdata,'Session') %>% 
   .[,paste('Δ',vars,sep = ''):= map(.SD,\(x) x - shift(x) ),
-    by = Number,.SDcols = vars]
+    by = Number,.SDcols = vars] %>% print()
 
 
 # Correlation ---------------------------------------------------------------------
@@ -113,7 +115,8 @@ diff <- setorderv(rawdata,'Session') %>%
              'ΔEmotionality','ΔOCEAN','ΔAttitude','ΔACIPS'),
            c('ΔGSE','ΔRSE','ΔSES','ΔExt','ΔEmo','ΔB5','ΔAtt','ΔACI'))
 
-
+(cor.data <- diff %>% select( where(\(x) !any(is.na(x)))))
+#[,!.('Number','Index','Session','Label')]
 
 
 D.pcorplot <- corrplot(D.pcor,p.mat = pcor.t$p,
@@ -193,7 +196,7 @@ info <- data.table(
   label = c('control','quarantine','release','confirm','dance'),
   t1 = list('base','pre_Q','post_Q','pre_Q','pre_dance'),
   t2 = list('pre_Q','post_Q','pre_dance','pre_dance','post_dance')
-) %>% 
+)[,timelabel := map2(t1,t2,c)] %>% 
   setindex(label) 
 
 myresult <- copy(info) 
@@ -273,7 +276,6 @@ my_boxplot <- function(label) {
 save_as_docx(path = "C:/Users/Ship/R")
 
 
-
 # Mod/Med
 
 Med <- PROCESS(dance_diff,y = 'ΔExtraversion',x = 'ΔSAQ',
@@ -324,6 +326,57 @@ adj.plot<- ggplot(tileplot,aes(x = vars,y = method,fill = sig))+
          axis.text.x = element_text(size = 12))
 
 
-#gjhgg
+(testtable <- rawdata %>% 
+  select(Label,Gender) %>% 
+  tbl_summary(by = Label))
 
-#sfes
+tf <- tempfile(fileext = ".docx")
+tblresult %>% save_as_docx(path = "/Users/ship/Documents/Code/Rcode",)
+
+
+tblresult <- myresult$t_table %>% map_if(is.list,as_flex_table)
+
+# 将表格插入到Word文档中
+ accumulate(tblresult,\(x) body_add_docx(doc, x))
+doc <- body_add_flextable(doc, table2)
+
+# 创建要插入的表格
+table1 <- flextable(mtcars)
+table2 <- flextable(iris)
+
+# 将表格插入到Word文档中
+doc <- body_add_flextable(doc, table1)
+doc <- body_add_flextable(doc, table2)
+
+# 保存Word文档
+print(doc, target = "mytables.docx")
+
+
+
+
+library(flextable)
+library(officer)
+
+# 创建一个空的word_document对象
+doc <- read_docx()
+
+# 创建要输出的表格和表格标题
+table1 <- iris[1:5, 1:4] %>% regulartable()
+table2 <- mtcars[1:5, 1:4] %>% regulartable()
+table3 <- airquality[1:5, 1:4] %>% regulartable()
+table_titles <- c("Table 1", "Table 2", "Table 3")
+
+tblresult %>% set_names(paste('table',1:3,sep = ''))
+# 循环输出每个表格并加上标题
+for (i in seq_along(table_titles)) {
+  # 创建段落对象
+  p <- fp_text(bold(italic(table_titles[i])), font.size = 14)
+  # 将段落对象添加到文档对象中
+  doc <- doc %>% body_add_par(p, style = "centered")
+  # 将表格对象添加到文档对象中
+  doc <- doc %>% body_add_flextable(get(paste0("table", i)), style = "table_template")
+}
+
+# 保存文档
+print(doc, target = "output.docx")
+

@@ -1,3 +1,11 @@
+---
+title: "table"
+author: "ship"
+format: docx
+editor: visual
+---
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 # ggpacket ----------------------------------------------------------------
 pack_geom_box <- function(...) {
@@ -268,4 +276,135 @@ my_diff <- function(cleandata,vars) {
 }
 
 
+
+
+
+```
+
+## subject
+
+```{r echo=FALSE,message=FALSE, warning=FALSE}
+library(flextable)
+fac.vars <- c('Session','Number','Gender')
+
+rawdata <- import('D_YH_Behavior.xlsx',sheet='rawdata',as = 'dt')[
+  # if LHS has multiple col names , should add ()
+  , (fac.vars):= lapply(.SD,as.factor),.SDcols = fac.vars][
+    ,Gender:=fct_recode(Gender,'Male' = '1','Female'= '2')][
+      .(Session = as.character(1:5) ,to = c('base','pre_Q','post_Q','pre_dance','post_dance')),
+      on = 'Session',Label := i.to ]
+subject <- rawdata[,.(number = .(Number)),by = .(Label,Gender)][,.SD,Gender][
+  , c("quit", "keep", "newadd"):=
+    transpose(map2(number,dplyr::lag(number),\(x,y)
+                   list( setdiff(y, x), #quit
+                         intersect(x, y), #same
+                         setdiff(x, y)) )),by = Gender] 
+(sub_number <- subject[ ,map(.SD,\(x) map_int(x,length)),by = .(Label,Gender)])
+
+vars <- rawdata[,SES_em : Attitude] %>% names()
+Qaddvars <- c('A1','A2','A3','Attitude','ISI','IES')
+Qvars = c('SEAQ','LSA','PCS','MCS','BAI','BDI')
+con.vars <- c('Age','Gender','Attendance')
+
+dancevars <- setdiff(unlist(vars), c('SEAQ','LSA','SES',
+                                     #'Extraversion','Emotionality',
+                                     'OCEAN','ACIPS',
+                                     Qaddvars))
+
+
+```
+
+```{r echo=FALSE,message=FALSE, warning=FALSE}
+p_load(corrplot,broom,rstatix,ggpackets,broom.mixed,ggeffects,gtsummary)
+
+# need set key on time column
+# which contain t1 and t2 value
+info <- data.table(
+  label = c('control','quarantine','release','confirm','dance'),
+  t1 = list('base','pre_Q','post_Q','pre_Q','pre_dance'),
+  t2 = list('pre_Q','post_Q','pre_dance','pre_dance','post_dance')
+) %>% 
+  setindex(label) 
+
+myresult <- copy(info) 
+# dancevars / con.vars 
+myresult[,data := map2(t1,t2,\(x,y) rawdata[c(x,y),on = 'Label'])][
+  , `:=`(c("measure", "var",'cleandata','diff'), 
+         {
+           measure = map(data,find_measure)
+           var = map(measure,~intersect(dancevars,.))
+           cleandata = map2(data,var, \(x,y) 
+                            x[Number %in% find_samesub(x),
+                              .SD,.SDcols = c('Session','Number',con.vars,y)])
+           diff = map2(cleandata,var,my_diff)
+           .(measure, var, cleandata, diff) 
+         })][
+             
+             c("control", "release", "dance"),
+             `:=`(c('ttest_result','t_table'), 
+                  {
+                    ttest_result = pmap(list(data,var,t2),my_ttest) # t2 argument to set ref group
+                    tabledata = map2(cleandata,var, \(x,y)
+                                     x[,.SD,.SDcols = c('Number','Session',y)][
+                                       ,Session := as.character(Session)])
+                    table = map(tabledata,my_t_table)
+                    .(ttest_result,table)
+                  })
+             ,on = 'label'][
+               
+               c("quarantine", "release", "confirm"),
+               Quarantine := map(data,~my_lme(.,Qvars)),on = 'label'][
+                 
+                 'release',
+                 `:=`(c('lme_result'), 
+                      {
+                        lme_result = map2(data,var,my_lme)
+                        .(lme_result)
+                      })
+                 , on = 'label']
+
+
+
+set_dtlist_name(myresult,'label')
+
+
+
+my_boxplot <- function(label) {
+  
+  myresult[label,ttest_result,on = 'label'] %>% unlist(recursive = F) %$%  # magrittr:: Expose the names in lhs to the rhs expression
+    {                       # %$% pass on to all layers using {}
+      
+      ggplot(longdata[sig.vars.fdr],aes(Label,value))+
+        #Do not need D_ttest$t_data,if use %$%
+        
+        pack_geom_box(line.mapping = aes(group = Number),
+                      box.mapping = aes(fill = Label)) %+% #ggplot:: expose
+        pack_sig(text.data = stat.test[sig.vars.fdr], 
+                 #dont need to D_ttest$t_test,if use %$%
+                 
+                 text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.adj)))+
+        facet_wrap(~vars,scales = 'free_y')+
+    #    scale_x_discrete(labels = timelabel)+
+    #    scale_fill_brewer(palette = 'Set1',labels = timelabel)+
+        # pack_scale(all.labels = c(timelabel),
+        #            fill.palette = 'Set1')+
+        theme_bw()+theme(axis.title = element_blank())+
+    #    labs(title = 'Significant variable PLOT on paired t-test',
+    #         subtitle = 'N = 19 (F:10 / M:9)')+
+        pack_theme(theme.legend.position='none')
+    }
+  
+}
+
+```
+
+```{r echo = FALSE,message=FALSE, warning=FALSE}
+sub_number %>% df_printer()
+my_boxplot('dance')
+
+myresult$t_table %>% map_if(is.list,as_flex_table)
+```
+```{r}
+
+```
 

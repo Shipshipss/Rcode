@@ -1,0 +1,49 @@
+---
+title: "test"
+author: "Ship"
+date: "2023-03-07"
+output: word_document
+df_print: !expr function(x) flextable::df_printer(x)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(flextable)
+fac.vars <- c('Session','Number','Gender')
+
+rawdata <- import('D_YH_Behavior.xlsx',sheet='rawdata',as = 'dt')[
+  # if LHS has multiple col names , should add ()
+  , (fac.vars):= lapply(.SD,as.factor),.SDcols = fac.vars][
+    ,Gender:=fct_recode(Gender,'Male' = '1','Female'= '2')][
+      .(Session = as.character(1:5) ,to = c('base','pre_Q','post_Q','pre_dance','post_dance')),
+      on = 'Session',Label := i.to ]
+subject <- rawdata[,.(number = .(Number)),by = .(Label,Gender)][,.SD,Gender][
+  , c("quit", "keep", "newadd"):=
+    transpose(map2(number,dplyr::lag(number),\(x,y)
+                   list( setdiff(y, x), #quit
+                         intersect(x, y), #same
+                         setdiff(x, y)) )),by = Gender] 
+(sub_number <- subject[ ,map(.SD,\(x) map_int(x,length)),by = .(Label,Gender)])
+
+
+sub_number %>% df_printer()
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
