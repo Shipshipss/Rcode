@@ -101,10 +101,10 @@ sub_wide <- sub_number %>%
 # Diff --------------------------------------------------------------------
 
 #All diff on each adjacent time point —— diff 
-diff <- setorderv(rawdata,'Session') %>% 
+(diff <- setorderv(rawdata,'Session') %>% 
   .[,paste('Δ',vars,sep = ''):= map(.SD,\(x) x - shift(x) ),
-    by = Number,.SDcols = vars] %>% print()
-
+    by = Number,.SDcols = vars] %>% 
+  select( where(\(x) !any(is.na(x)))))
 
 # Correlation ---------------------------------------------------------------------
 #corrplot variable order
@@ -115,8 +115,8 @@ diff <- setorderv(rawdata,'Session') %>%
              'ΔEmotionality','ΔOCEAN','ΔAttitude','ΔACIPS'),
            c('ΔGSE','ΔRSE','ΔSES','ΔExt','ΔEmo','ΔB5','ΔAtt','ΔACI'))
 
-(cor.data <- diff %>% select( where(\(x) !any(is.na(x)))))
-#[,!.('Number','Index','Session','Label')]
+
+cordata <- diff[,-c('Number','Index','Session','Label')][,Gender:=as.numeric(Gender)]
 
 
 D.pcorplot <- corrplot(D.pcor,p.mat = pcor.t$p,
