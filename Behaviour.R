@@ -3,7 +3,7 @@ Sys.setenv(OPENAI_API_KEY = "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
 p_load(bruceR,psych,purrr,pacman,magrittr)
 
 
-
+library(forcats)
 library(gghighlight)
 library(ggthemes)
 library(ggdist)
@@ -40,10 +40,8 @@ rawdata <- import('D_YH_Behavior.xlsx',sheet='rawdata',as = 'dt')[
   # if LHS has multiple col names , should add ()
   , (fac.vars):= lapply(.SD,as.factor),.SDcols = fac.vars][
     ,Gender:=fct_recode(Gender,'Male' = '1','Female'= '2')][
-      .(Session = as.factor(1:5) ,to = c('base','pre_Q','post_Q','pre_dance','post_dance')),
-      on = 'Session',Label := i.to ][,Label:=factor(Label,levels = c('base','pre_Q','post_Q','pre_dance','post_dance'))]
-                                     
-                                     
+      .(Session = as.factor(1:5) ,to = c('base','pre_Q','post_Q','pre_dance','post_dance') %>% factor(.,.)),
+      on = 'Session',Label := i.to ]
 
 # get present
 Attendance <- rawdata[,.(Number,Attendance)] %>% na.omit()
@@ -101,23 +99,20 @@ sub_wide <- sub_number %>%
 # Diff --------------------------------------------------------------------
 
 #All diff on each adjacent time point —— diff 
-(diff <- setorderv(rawdata,'Session') %>% 
-  .[,paste('Δ',vars,sep = ''):= map(.SD,\(x) x - shift(x) ),
-    by = Number,.SDcols = vars] %>% 
-  select( where(\(x) !any(is.na(x)))))
-
+(diff <- setorderv(rawdata,'Session')[,paste('Δ',vars,sep = ''):= map(.SD,\(x) x - shift(x) ),
+    by = Number,.SDcols = vars] %>% print())
 # Correlation ---------------------------------------------------------------------
-#corrplot variable order
 
+#select( where(\(x) !any(is.na(x)) )) 
 # need to convert Gender variable to numeric class before calculation of corr 
 
-  setnames(c('ΔGSES','ΔRSES','ΔSES_em','ΔExtraversion',
-             'ΔEmotionality',),
-           c('ΔGSE','ΔRSE','ΔSES','ΔExt','ΔEmo'))
+  # setnames(c('ΔGSES','ΔRSES','ΔSES_em','ΔExtraversion',
+  #            'ΔEmotionality',),
+  #          c('ΔGSE','ΔRSE','ΔSES','ΔExt','ΔEmo'))
 
 
-cordata <- diff[,-c('Number','Index','Session','Label')][,Gender:=as.numeric(Gender)]
-
+(cordata <- diff['pre_dance',.SD,.SDcols = patterns('^Δ'),on = 'Label',by = con.vars] %>% 
+   select( where(\(x) !all(is.na(x)) )) %>% na.omit())
 
 
 
@@ -197,13 +192,13 @@ Quarantine %$%
 
 
 
-# Dance -------------------------------------------------------------------
 p_load(corrplot,broom,rstatix,ggpackets,broom.mixed,ggeffects,gtsummary)
+# Dance -------------------------------------------------------------------
 
 # need set key on time column
 # which contain t1 and t2 value
 info <- data.table(
-  label = c('control','quarantine','release','confirm','dance'),
+  label = c('control','quarantine','release','confirm','dance') %>% factor(.,.),
   t1 = list('base','pre_Q','post_Q','pre_Q','pre_dance'),
   t2 = list('pre_Q','post_Q','pre_dance','pre_dance','post_dance')
 )[,timelabel := map2(t1,t2,c)] %>% 
@@ -222,68 +217,81 @@ myresult[,data := map2(t1,t2,\(x,y) rawdata[c(x,y),on = 'Label'])][
            diff = map2(cleandata,var,my_diff)
            .(measure, var, cleandata, diff) 
          })][
-           ,pcor:= map2(diff,var,\(x,y)  my_pcor(x,str_c('Δ',y),con.vars))][
+           
+           c("control", "release", "dance"),
+           `:=`(c('pcor','ttest_result'), 
+                {
+                  pcor = map2(diff,var,\(x,y)  my_pcor(x,str_c('Δ',y),con.vars))
+                  
+                  ttest_result = pmap(list(data,var,t2),my_ttest) # t2 argument to set ref group
+
+                  .(pcor,ttest_result)
+                })
+           ,on = 'label'][
              
-             c("control", "release", "dance"),
-             `:=`(c('ttest_result','t_table'), 
-                  {
-                    ttest_result = pmap(list(data,var,t2),my_ttest) # t2 argument to set ref group
-                    tabledata = map2(cleandata,var, \(x,y)
-                                     x[,.SD,.SDcols = c('Number','Session',y)][
-                                       ,Session := as.character(Session)])
-                    table = map(tabledata,my_t_table)
-                    .(ttest_result,table)
-                  })
-             ,on = 'label'][
+             c("quarantine", "release", "confirm"),
+             Quarantine := map(data,~my_lme(.,Qvars)),on = 'label'][
                
-               c("quarantine", "release", "confirm"),
-               Quarantine := map(data,~my_lme(.,Qvars)),on = 'label'][
-                 
-                 'release',
-                 `:=`(c('lme_result'), 
+               'release',
+               `:=`(c('lme_result'), 
+                    {
+                      lme_result = map2(data,var,my_lme)
+                      .(lme_result)
+                    })
+               , on = 'label'] %>% 
+
+set_dtlist_name('label')
+
+# set result column to DT makes result not visual enough 
+# so Transfer this step into the get_result function
+# but this can not get info
+# so that merge info by hand 
+get_result('pcor')
+get_result('ttest_result') 
+
+ttest_result[,
+             `:=`(c('plot'), 
                       {
-                        lme_result = map2(data,var,my_lme)
-                        .(lme_result)
-                      })
-                 , on = 'label']
+
+                      #  tabledata = map2(cleandata,var, \(x,y) x[,.SD,.SDcols = c('Number','Session',y)][
+                       #                    ,Session := fct_drop(Session,only = NULL)])
+                     #  table = map(tabledata, my_t_table)
+                        
+                      #  boxplot = pmap(list(longdata,sig.vars.fdr,stat.test),my_boxplot)
+                       boxplot = map(longdata \(x) ggplot(x,aes(Label))) 
+                        .(boxplot)
+                      })]
 
 
 
-set_dtlist_name(myresult,'label')
 
-
-
-my_boxplot <- function(label) {
+my_boxplot <- function(longdata,var,test) {
   
-  myresult[label,ttest_result,on = 'label'] %>% unlist(recursive = F) %$%  # magrittr:: Expose the names in lhs to the rhs expression
-    {                       # %$% pass on to all layers using {}
-      
-      ggplot(longdata[sig.vars.fdr],aes(Label,value))+
-        #Do not need D_ttest$t_data,if use %$%
-        
-        pack_geom_box(line.mapping = aes(group = Number),
-                      box.mapping = aes(fill = Label)) %+% #ggplot:: expose
-        pack_sig(text.data = stat.test[sig.vars.fdr], 
-                 #dont need to D_ttest$t_test,if use %$%
-                 
-                 text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.adj)))+
-        facet_wrap(~vars,scales = 'free_y')+
+  ggplot(longdata[var],aes(Label,value))+
+    
+    pack_geom_box(line.mapping = aes(group = Number),
+                  box.mapping = aes(fill = Label)) %+% #ggplot:: expose
+    
+    pack_sig(text.data = test[var], 
+             text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.adj)))+
+    
+    facet_wrap(~vars,scales = 'free_y')+
     #    scale_x_discrete(labels = timelabel)+
-    #    scale_fill_brewer(palette = 'Set1',labels = timelabel)+
-        # pack_scale(all.labels = c(timelabel),
-        #            fill.palette = 'Set1')+
-        theme_bw()+theme(axis.title = element_blank())+
-    #    labs(title = 'Significant variable PLOT on paired t-test',
-    #         subtitle = 'N = 19 (F:10 / M:9)')+
-        pack_theme(theme.legend.position='none')
-    }
-  
+       scale_fill_brewer(palette = 'Set1')+
+  #  pack_scale(all.labels = levels(timelabel),
+ #              fill.palette = 'Set1')+
+    theme_bw()+theme(axis.title = element_blank())+
+    #   labs(title = 'Significant variable PLOT on paired t-test',
+    #       subtitle = 'N = 19 (F:10 / M:9)')+
+    pack_theme(theme.legend.position='none')
 }
 
 
 
 
-save_as_docx(path = "C:/Users/Ship/R")
+
+
+
 
 
 # Mod/Med
@@ -296,31 +304,36 @@ Med <- PROCESS(dance_diff,y = 'ΔExtraversion',x = 'ΔSAQ',
 Mod <- PROCESS(rawdata['4'],y = 'BDI',x = 'SES',
                mods=c('RSES'),covs = c('Age','Gender','Present'))
 
-
-
-# test --------------------------------------------------------------------
-
-get_result <- function(variable) {
+getresult <- function(variable) {
   # Each element may have a different length or be of a completely different type, 
   # so it is necessary to wrap them in a list.
   # then convert them to data.table and bind them together to look better
   result <-  with(myresult,get(variable)) %>% 
     map( \(x) map(x,list) %>% as.data.table()) %>% 
-    rbindlist(idcol = 'label')
-  # usetoplot <- result[info,on = 'label'][,timelabel:=map2(t1,t2,c)]
+    rbindlist(idcol = 'label') %>% .[,label := as.factor(label)]  %>% 
+    merge(myresult[,.SD,.SDcols = c(names(info),'var')] , . ,by = 'label') %>% 
+    .[,label := fct_drop(label,only = NULL)] %>% 
+    # directly assign to global environment named input : 'variable'
+    assign(variable,.,envir = .GlobalEnv)
   
-  # names = c('result','usetoplot')
+  # list2env(.GlobalEnv)  
   
-  #return(setNames(list(result,usetoplot), names))
+  # append(list(vars = dancevars),after = 0) 
   return(result)
 }
 
-# list2env(.GlobalEnv)  
 
-# append(list(vars = dancevars),after = 0) %>% 
 
-rls <- 
- get_result('ttest_result') %>% list2env()
+
+# test --------------------------------------------------------------------
+
+
+setattr(myresult$ttest_result,'analysis','paired-t')
+get_rownames <- attr_getter("analysis")
+get_rownames(myresult)
+
+
+
 
 
 # One time use ------------------------------------------------------------
@@ -390,4 +403,10 @@ for (i in seq_along(table_titles)) {
 # 保存文档
 print(doc, target = "output.docx")
 
+
+reset_gtsummary_theme()
+theme_gtsummary_language(language = "zh-tw")
+lang_theme <- 
+  tbl_regression(m1, exponentiate = TRUE) %>%
+  modify_caption("Language Theme (Chinese)")
 

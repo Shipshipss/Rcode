@@ -177,25 +177,37 @@ my_ttest <- function(data,variable,ref,p.adj.method = 'fdr') {
   
   # c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY",
   #   "fdr", "none")
+
+  # tabledata <- cleandata[,.SD,.SDcols = c('Number','Session',variable)][
+  #                    ,Session := as.character(Session)]
+  # table = my_t_table(tabledata)
   
-  names <-  c('sub','cleandata',"longdata", "stat.test", "sig.vars.nocor", str_c('sig.vars.',p.adj.method))
-  
+  names <-  c('sub','cleandata',"longdata", "stat.test", 
+              "sig.vars.nocor", str_c('sig.vars.',p.adj.method))
+  # dont forget to add names and return to save tbl or plot in ttest_result
   return(setNames(list(sub, cleandata, longdata, stat.test, sig.vars.nocor, sig.vars.cor),names))
   
 }
 
 set_dtlist_name <- function(data,label) {
+  # set label to factor but 
+  # data[['label']] returns a factor with levels, and not a character 
+  # so create new label
+  
+  label <- data[[label]] %>% as.character()
   
   data[,map(.SD,as.list)] %>% names() %>% 
     map(~with(data, get(.x))) %>% 
-    map(~setattr(.x,'names',data[[label]] )) %>% 
-    unlist(recursive = F)
+    map(~setattr(.x,'names',label )) %>% 
+    unlist(recursive = F) # unlist map function generate list 
   
 }
 
 tbl_ttest <- function(data, variable, by, ...) {
   t.test(data[[variable]] ~ as.factor(data[[by]]),paired = T) %>%
     broom::tidy() %>%
+    # ttest default compute order : mean1 - mean2, *-1 reverse, so is m2 - m1 (post - pre)
+    mutate(statistic = statistic*(-1)) %>% 
     select(statistic, p.value)
 }
 
@@ -203,25 +215,36 @@ my_t_table <- function(data) {
   
   tbl <- tbl_summary(data,by = Session,include = -Number,
                      statistic = list(all_continuous() ~ '{mean} ({sd})')) %>% 
+    # add_p(test = all_continuous() ~ "t.test",
+    #       test.args = all_tests("t.test") ~ list(paired = TRUE)) %>%
+    # add a header to the statistic column, which is hidden by default
+    # adding the header will also unhide the column
     add_stat(fns = everything() ~ tbl_ttest) %>%
     add_q() %>%  bold_p(q = T) %>% add_significance_stars() %>% 
     modify_header(list(statistic ~ "**t-statistic**",p.value ~ "**p-value**")) %>%
     modify_fmt_fun(list(statistic ~ style_sigfig,p.value ~ style_pvalue) ) 
-  #as_flex_table() 
+
   
   return(tbl)
 }
 
+
+
+
+
 # Not done ---------------------------------------------------------------------
-my_pcor <- function(data,vars,control) {
+my_cor_pcor <- function(data,vars,control) {
+  
+  cor <- corr.test(data[,-'Number'])
   
   N =  uniqueN(data,by = 'Number')
   # corr.p may be applied to the results of partial.r if n is set to n - s 
   # (where s is the number of variables partialed out)
   pcor <- partial.r(data,c(vars),control)
   pcor.test <- corr.p(pcor,n = N)
-  names <- c("pcor", "pcor.test")
-  return(setNames(list(pcor, pcor.test), names))
+  
+  names <- c('cor',"pcor", "pcor.test")
+  return(setNames(list(cor,pcor, pcor.test), names))
 }
 
 my_lme <- function(data,dv,p.adj.method = 'fdr') {
@@ -257,7 +280,7 @@ my_recode <- function(DT,lut_list) {
 my_diff <- function(cleandata,vars) {
   
   
-  diff <-cleandata[,map(.SD,\(x) x - shift(x) ),by = Number,.SDcols = vars] %>% 
+  diff <- cleandata[,map(.SD,\(x) x - shift(x) ),by = Number,.SDcols = vars] %>% 
     na.omit()
   setnames(diff,vars,str_c('Δ',vars))
   
@@ -267,5 +290,29 @@ my_diff <- function(cleandata,vars) {
   
 }
 
-
+my_boxplot <- function(label) {
+  
+  myresult[label,ttest_result,on = 'label'] %>% unlist(recursive = F) %$%  # magrittr:: Expose the names in lhs to the rhs expression
+    {                       # %$% pass on to all layers using {}
+      
+      ggplot(longdata[sig.vars.fdr],aes(Label,value))+
+        #Do not need D_ttest$t_data,if use %$%
+        
+        pack_geom_box(line.mapping = aes(group = Number),
+                      box.mapping = aes(fill = Label)) %+% #ggplot:: expose
+        pack_sig(text.data = stat.test[sig.vars.fdr], 
+                 #dont need to D_ttest$t_test,if use %$%
+                 
+                 text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.adj)))+
+        facet_wrap(~vars,scales = 'free_y')+
+        #    scale_x_discrete(labels = timelabel)+
+        #    scale_fill_brewer(palette = 'Set1',labels = timelabel)+
+        # pack_scale(all.labels = c(timelabel),
+        #            fill.palette = 'Set1')+
+        theme_bw()+theme(axis.title = element_blank())+
+        #    labs(title = 'Significant variable PLOT on paired t-test',
+        #         subtitle = 'N = 19 (F:10 / M:9)')+
+        pack_theme(theme.legend.position='none')
+    }
+}
 
