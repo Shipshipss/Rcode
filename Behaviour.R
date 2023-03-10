@@ -112,21 +112,15 @@ sub_wide <- sub_number %>%
 # need to convert Gender variable to numeric class before calculation of corr 
 
   setnames(c('ΔGSES','ΔRSES','ΔSES_em','ΔExtraversion',
-             'ΔEmotionality','ΔOCEAN','ΔAttitude','ΔACIPS'),
-           c('ΔGSE','ΔRSE','ΔSES','ΔExt','ΔEmo','ΔB5','ΔAtt','ΔACI'))
+             'ΔEmotionality',),
+           c('ΔGSE','ΔRSE','ΔSES','ΔExt','ΔEmo'))
 
 
 cordata <- diff[,-c('Number','Index','Session','Label')][,Gender:=as.numeric(Gender)]
 
 
-D.pcorplot <- corrplot(D.pcor,p.mat = pcor.t$p,
-                       method="square", type = 'l',
-                       insig = 'blank',
-                       addCoef.col = 'white',number.cex = 0.5,
-                       tl.pos = 'd',tl.srt = 0,tl.col='black',tl.cex = 0.6,tl.offset = 0.1,
-                       # cl.pos = 'n', # remove color bar
-                       # bg = 'color1',addgrid.col = 'color2',
-                       col = COL2('BrBG'))
+
+
 
 #Simple correlation
 D.cor <- Qdiff %>% 
@@ -141,6 +135,22 @@ D.corplot <- corrplot(D.cor$r,p.mat = D.cor$p,
                       mar = c(0,0,1,0))
 
 
+
+mytest[c("control", "release", "dance"),map(pcor,my_corplot),on='label']
+
+my_corplot <- function(x) {
+ pcor <-  with(x, get('pcor'))
+ pcor.test <-  with(x, get('pcor.test'))
+ plot <- corrplot(pcor,p.mat = pcor.test$p,
+                  method="square", type = 'l',
+                  insig = 'blank',
+                  addCoef.col = 'white',number.cex = 0.5,
+                  tl.pos = 'd',tl.srt = 0,tl.col='black',tl.cex = 0.6,tl.offset = 0.1,
+                  # cl.pos = 'n', # remove color bar
+                  # bg = 'color1',addgrid.col = 'color2',
+                  col = COL2('BrBG'))
+ return(plot)
+}
 
 
 
@@ -290,7 +300,7 @@ Mod <- PROCESS(rawdata['4'],y = 'BDI',x = 'SES',
 
 # test --------------------------------------------------------------------
 
-get_result <- function(result,variable) {
+get_result <- function(variable) {
   # Each element may have a different length or be of a completely different type, 
   # so it is necessary to wrap them in a list.
   # then convert them to data.table and bind them together to look better
@@ -309,8 +319,8 @@ get_result <- function(result,variable) {
 
 # append(list(vars = dancevars),after = 0) %>% 
 
-
-
+rls <- 
+ get_result('ttest_result') %>% list2env()
 
 
 # One time use ------------------------------------------------------------
