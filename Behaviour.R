@@ -250,34 +250,50 @@ get_result('pcor')
 get_result('ttest_result') 
 
 ttest_result[,
-             `:=`(c('plot'), 
+             `:=`(c('data','test'), 
                       {
 
                       #  tabledata = map2(cleandata,var, \(x,y) x[,.SD,.SDcols = c('Number','Session',y)][
                        #                    ,Session := fct_drop(Session,only = NULL)])
                      #  table = map(tabledata, my_t_table)
-                        
-                      #  boxplot = pmap(list(longdata,sig.vars.fdr,stat.test),my_boxplot)
-                       boxplot = map(longdata \(x) ggplot(x,aes(Label))) 
-                        .(boxplot)
+                        data = map(longdata,sig.vars.fdr, \(x,y) x[y])
+                        test = map(stat.test,sig.vars.fdr, \(x,y) x[y])
+                      #  boxplot = map2(data,test,my_boxplot)
+                       # boxplot = map(longdata, \(x)
+                       #               ggplot(x,aes(Label,value))+
+                       #                 geom_boxplot()+facet_wrap(~vars,scales = 'free_y')
+                       #                 )
+                        .(data,test)
                       })]
+ttest_result$plot
+ttest_result$longdata
 
+ttest_result[,plot:=map2(longdata,sig.vars.fdr, \(x,y)
+                        ggplot(data = x[y],aes(Session,value))+
+                          geom_boxplot()+
+                          facet_wrap(~x$vars,scales = 'free_y'))]
 
+a <- ttest_result %>% 
+  mutate(plot = map2(longdata,sig.vars.fdr, \(x,y) 
+                     ggplot(data = x[y], aes(Session,value))+
+                      geom_boxplot()+facet_wrap(~vars,scales = 'free_y')))
+    #  ggtitle(glue("Number of Cylinder: {.y}")) +
+a$plot
 
-
-my_boxplot <- function(longdata,var,test) {
+my_boxplot <- function(data,test) {
   
-  ggplot(longdata[var],aes(Label,value))+
+  
+  ggplot(data,aes(Session,value))+
     
     pack_geom_box(line.mapping = aes(group = Number),
-                  box.mapping = aes(fill = Label)) %+% #ggplot:: expose
+                  box.mapping = aes(fill = Session)) %+% #ggplot:: expose
     
-    pack_sig(text.data = test[var], 
+    pack_sig(text.data = test, 
              text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.adj)))+
     
     facet_wrap(~vars,scales = 'free_y')+
     #    scale_x_discrete(labels = timelabel)+
-       scale_fill_brewer(palette = 'Set1')+
+    #   scale_fill_brewer(palette = 'Set1')+
   #  pack_scale(all.labels = levels(timelabel),
  #              fill.palette = 'Set1')+
     theme_bw()+theme(axis.title = element_blank())+
