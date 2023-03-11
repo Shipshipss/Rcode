@@ -1,7 +1,6 @@
 Sys.setenv(LANGUAGE = "en")
-#Sys.setenv(OPENAI_API_KEY = "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")
 p_load(bruceR,psych,purrr,pacman,magrittr)
-#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
+
 
 library(forcats)
 library(gghighlight)
@@ -362,12 +361,10 @@ getresult <- function(variable) {
 
 
 
-tbllist <- lme_result$model %>% unlist(recursive = F) %>% map(tbl_regression)
-tbl_stack(tbllist,)
 
 lme_result[,tbl := .(map(unlist(model,recursive = F),tbl_regression))]
-lme_result[,tbl_stack(unlist(tbl,recursive = F),group_header = var[[1]])]
-lme_result[,]
+lme_tbl <- lme_result[,tbl_stack(unlist(tbl,recursive = F),group_header = var[[1]])] %>% add_q()
+
 # One time use ------------------------------------------------------------
 
 
