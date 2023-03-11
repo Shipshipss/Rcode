@@ -140,6 +140,55 @@ find_samesub <- function(data) {
   return(sub)
 }
 
+my_cor_pcor <- function(data,vars,control) {
+  
+  cor <- corr.test(data[,-'Number'])
+  
+  
+  N =  uniqueN(data,by = 'Number')
+  # corr.p may be applied to the results of partial.r if n is set to n - s 
+  # (where s is the number of variables partialed out)
+  pcor <- partial.r(data,c(vars),control)
+  pcor.test <- corr.p(pcor,n = N,adjust = 'fdr')
+  
+  names <- c('cor',"pcor", "pcor.test")
+  return(setNames(list(cor,pcor, pcor.test), names))
+}
+
+my_lme <- function(data,dv,p.adj.method = 'fdr') {
+  #model_result
+  model = my_model(data, dv)
+  summary = map(model,~ tidy(., effects = 'fixed'))
+  # prediction = map(model,~ggpredict(terms = c('Session')))
+  
+  #model_sig
+  p = map(summary,list('p.value',2))
+  p.adj = get_corr_p(p) %>% round(2)
+  sig.adj =  map(p.adj,~ .<0.05)
+  sig.vars.adj = keep(sig.adj,isTRUE) %>% names()
+  
+  #prediction
+  
+  
+  names = c("model", "summary",'p',map_chr(c('p.adj.','sig.vars.'), ~ str_c(.,p.adj.method)))
+  
+  return(setNames(list(model, summary, p, p.adj, sig.vars.adj), names))
+  
+}
+
+my_diff <- function(cleandata,vars) {
+  
+  
+  diff <- cleandata[,map(.SD,\(x) x - shift(x) ),by = Number,.SDcols = vars] %>% 
+    na.omit()
+  setnames(diff,vars,str_c('Δ',vars))
+  
+  cleandata[,.SD,.SDcols = c('Number',con.vars)][
+    diff, on = "Number", mult = "first"][,Gender:=as.numeric(Gender)]
+  
+  
+}
+
 
 my_model <- function(data,dv) {
   model <- map(dv,~lmer(paste(.x,'~ Session + (1|Number)',collapse = ' '),data)) %>% 
@@ -231,94 +280,6 @@ my_t_table <- function(data) {
 }
 
 
-
-
-
-# Not done ---------------------------------------------------------------------
-my_cor_pcor <- function(data,vars,control) {
-  
-  cor <- corr.test(data[,-'Number'])
-
-  
-  N =  uniqueN(data,by = 'Number')
-  # corr.p may be applied to the results of partial.r if n is set to n - s 
-  # (where s is the number of variables partialed out)
-  pcor <- partial.r(data,c(vars),control)
-  pcor.test <- corr.p(pcor,n = N,adjust = 'fdr')
-  
-  names <- c('cor',"pcor", "pcor.test")
-  return(setNames(list(cor,pcor, pcor.test), names))
-}
-
-my_lme <- function(data,dv,p.adj.method = 'fdr') {
-  #model_result
-  model = my_model(data, dv)
-  summary = map(model,~ tidy(., effects = 'fixed'))
-  # prediction = map(model,~ggpredict(terms = c('Session')))
-  
-  #model_sig
-  p = map(summary,list('p.value',2))
-  p.adj = get_corr_p(p) %>% round(2)
-  sig.adj =  map(p.adj,~ .<0.05)
-  sig.vars.adj = keep(sig.adj,isTRUE) %>% names()
-  
-  #prediction
-  
-  
-  names = c("model", "summary",'p',map_chr(c('p.adj.','sig.vars.'), ~ str_c(.,p.adj.method)))
-  
-  return(setNames(list(model, summary, p, p.adj, sig.vars.adj), names))
-  
-}
-
-
-# data.table function
-my_recode <- function(DT,lut_list) {
-  for (v in intersect(names(lut_list), colnames(DT))) {
-    DT[lut_list[[v]], on = paste0(v, "==from"), (v) := i.to]
-  }
-}
-
-
-my_diff <- function(cleandata,vars) {
-  
-  
-  diff <- cleandata[,map(.SD,\(x) x - shift(x) ),by = Number,.SDcols = vars] %>% 
-    na.omit()
-  setnames(diff,vars,str_c('Δ',vars))
-  
-  cleandata[,.SD,.SDcols = c('Number',con.vars)][
-    diff, on = "Number", mult = "first"][,Gender:=as.numeric(Gender)]
-  
-  
-}
-
-my_boxplot <- function(label) {
-  
-  myresult[label,ttest_result,on = 'label'] %>% unlist(recursive = F) %$%  # magrittr:: Expose the names in lhs to the rhs expression
-    {                       # %$% pass on to all layers using {}
-      
-      ggplot(longdata[sig.vars.fdr],aes(Label,value))+
-        #Do not need D_ttest$t_data,if use %$%
-        
-        pack_geom_box(line.mapping = aes(group = Number),
-                      box.mapping = aes(fill = Label)) %+% #ggplot:: expose
-        pack_sig(text.data = stat.test[sig.vars.fdr], 
-                 #dont need to D_ttest$t_test,if use %$%
-                 
-                 text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.adj)))+
-        facet_wrap(~vars,scales = 'free_y')+
-        #    scale_x_discrete(labels = timelabel)+
-        #    scale_fill_brewer(palette = 'Set1',labels = timelabel)+
-        # pack_scale(all.labels = c(timelabel),
-        #            fill.palette = 'Set1')+
-        theme_bw()+theme(axis.title = element_blank())+
-        #    labs(title = 'Significant variable PLOT on paired t-test',
-        #         subtitle = 'N = 19 (F:10 / M:9)')+
-        pack_theme(theme.legend.position='none')
-    }
-}
-
 my_corplot <- function(cor) {
   
   plot <- corrplot(cor$r,p.mat = cor$p,
@@ -390,3 +351,66 @@ my_boxplot <- function(longdata,var,test,timelabel,colors,subtitle,all) {
     
   }
 }
+
+getresult <- function(variable) {
+  # Each element may have a different length or be of a completely different type, 
+  # so it is necessary to wrap them in a list.
+  # then convert them to data.table and bind them together to look better
+  result <-  with(myresult,get(variable)) %>% 
+    map( \(x) map(x,list) %>% as.data.table()) %>% 
+    rbindlist(idcol = 'label') %>% .[,label := as.factor(label)]  %>% 
+    # merge info
+    merge(myresult[,.SD,.SDcols = c(names(info),'var')] , . ,by = 'label') %>% 
+    .[,label := fct_drop(label,only = NULL)] %>% 
+    # merge subinfo
+    merge(sub_t_wide,.,by.x = 'Label',by.y = 't2')%>% 
+    # directly assign to global environment named input : 'variable' 
+    assign(variable,.,envir = .GlobalEnv)
+  # set result column to DT makes result not visual enough 
+  # so Transfer this step into the get_result function
+  # but this can not get info
+  # so that merge info by hand 
+  return(result)
+}
+
+
+
+
+# Not done ---------------------------------------------------------------------
+
+
+# data.table function
+my_recode <- function(DT,lut_list) {
+  for (v in intersect(names(lut_list), colnames(DT))) {
+    DT[lut_list[[v]], on = paste0(v, "==from"), (v) := i.to]
+  }
+}
+
+
+# 
+#  my_boxplot <- function(label) {
+# 
+#   myresult[label,ttest_result,on = 'label'] %>% unlist(recursive = F) %$%  # magrittr:: Expose the names in lhs to the rhs expression
+#     {                       # %$% pass on to all layers using {}
+#       
+#       ggplot(longdata[sig.vars.fdr],aes(Label,value))+
+#         #Do not need D_ttest$t_data,if use %$%
+#         
+#         pack_geom_box(line.mapping = aes(group = Number),
+#                       box.mapping = aes(fill = Label)) %+% #ggplot:: expose
+#         pack_sig(text.data = stat.test[sig.vars.fdr], 
+#                  #dont need to D_ttest$t_test,if use %$%
+#                  
+#                  text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.adj)))+
+#         facet_wrap(~vars,scales = 'free_y')+
+#         #    scale_x_discrete(labels = timelabel)+
+#         #    scale_fill_brewer(palette = 'Set1',labels = timelabel)+
+#         # pack_scale(all.labels = c(timelabel),
+#         #            fill.palette = 'Set1')+
+#         theme_bw()+theme(axis.title = element_blank())+
+#         #    labs(title = 'Significant variable PLOT on paired t-test',
+#         #         subtitle = 'N = 19 (F:10 / M:9)')+
+#         pack_theme(theme.legend.position='none')
+#     }
+# }
+

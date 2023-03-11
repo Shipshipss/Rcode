@@ -2,7 +2,6 @@ Sys.setenv(LANGUAGE = "en")
 p_load(bruceR,psych,purrr,pacman,magrittr)
 
 
-library(forcats)
 library(gghighlight)
 library(ggthemes)
 library(ggdist)
@@ -21,18 +20,20 @@ library(jtools) #compare model coef
 
 library(styler) # find function and shortcut
 library(gt)
-library(gtsummary)
+
 
 library(lattice) # xy plot
 
 library(dotwhisker) ## coefficient plots
 library(tidyfast)
 library(dtplyr)
-library(gtsummary)
+
 
 # data import -------------------------------------------------------------
 # rawdata
 set.wd()
+p_load(glue,corrplot,broom,rstatix,ggpackets,broom.mixed,forcats,
+       ggeffects,gtsummary,officer,flextable)
 fac.vars <- c('Session','Number','Gender')
 
 rawdata <- import('D_YH_Behavior.xlsx',sheet='rawdata',as = 'dt')[
@@ -43,22 +44,23 @@ rawdata <- import('D_YH_Behavior.xlsx',sheet='rawdata',as = 'dt')[
       on = 'Session',Label := i.to ]
 
 # get present
-Attendance <- rawdata[,.(Number,Attendance)] %>% na.omit()
-rawdata <- merge(rawdata[,-'Attendance'],Attendance,by = 'Number',all = T)[order(Session)]
+Attendance <- rawdata[, .(Number, Attendance)] %>% na.omit()
+rawdata <- merge(rawdata[, -'Attendance'], Attendance, by = 'Number', all = T)[order(Session)]
 # after merge , the key column is set to 'Number' because by = 'Number'
-setindex(rawdata,Label,Number)
+setindex(rawdata, Label, Number)
 
 #vars
 
-vars <- rawdata[,SES_em : Attitude] %>% names()
-Qaddvars <- c('A1','A2','A3','Attitude','ISI','IES')
-Qvars = c('SEAQ','LSA','PCS','MCS','BAI','BDI')
-con.vars <- c('Age','Gender','Attendance')
+vars <- rawdata[, SES_em:Attitude] %>% names()
+Qaddvars <- c('A1', 'A2', 'A3', 'Attitude', 'ISI', 'IES')
+Qvars = c('SEAQ', 'LSA', 'PCS', 'MCS', 'BAI', 'BDI')
+con.vars <- c('Age', 'Gender', 'Attendance')
 
-dancevars <- setdiff(unlist(vars), c('SEAQ','LSA','SES',
-                                     #'Extraversion','Emotionality',
-                                     'OCEAN','ACIPS',
-                                     Qaddvars))
+dancevars <- setdiff(unlist(vars),
+                     c('SEAQ', 'LSA', 'SES',
+                       #'Extraversion','Emotionality',
+                       'OCEAN', 'ACIPS',
+                       Qaddvars))
 lut_list  <- list(
   t1 = data.table(from = as.character(1:4), 
                   to = c('base','pre_Q','post_Q','pre_dance')),
@@ -77,19 +79,22 @@ subject <- rawdata[,.(number = .(Number)),by = .(Label,Gender)][,.SD,Gender][
                          setdiff(x, y)) )),by = Gender] 
 
 
-rawdata %>% 
-  group_by(Gender, Session) %>%
-  summarise(sub = list(Number)) %>%
-  group_by(Gender) %>%
-  mutate(quit = map2(sub, dplyr::lag(sub), ~ setdiff(.y, .x)),
-         same = map2(sub, dplyr::lag(sub), ~ intersect(.x, .y)),
-         newadd = map2(sub, dplyr::lag(sub), ~ setdiff(.x, .y))) 
+# rawdata %>% 
+#   group_by(Gender, Session) %>%
+#   summarise(sub = list(Number)) %>%
+#   group_by(Gender) %>%
+#   mutate(quit = map2(sub, dplyr::lag(sub), ~ setdiff(.y, .x)),
+#          same = map2(sub, dplyr::lag(sub), ~ intersect(.x, .y)),
+#          newadd = map2(sub, dplyr::lag(sub), ~ setdiff(.x, .y))) 
 
 
 
 (sub_number <- subject[ ,map(.SD,\(x) map_int(x,length)),by = .(Label,Gender)])
 
-(sub_t_wide <- sub_number %>% 
+sub <- sub_number %>% 
+  dcast(Label ~ Gender,value.var = c('number','keep')) 
+
+  (sub_t_wide <- sub_number %>% 
     dcast(Label ~ Gender,value.var = c('keep')) %>% 
     .[,allkeep := Male + Female] %>% 
     .[,subinfo:= pmap(.(allkeep,Male,Female), 
@@ -177,19 +182,22 @@ Quarantine %$%
 
 
 
-
-p_load(corrplot,broom,rstatix,ggpackets,broom.mixed,ggeffects,gtsummary,officer,flextable)
 # Dance -------------------------------------------------------------------
 
 # need set key on time column
 # which contain t1 and t2 value
 info <- data.table(
-  label = c('control','quarantine','release','confirm','dance') %>% factor(.,.),
-  t1 = c('base','pre_Q','post_Q','pre_Q','pre_dance'),
-  t2 = c('pre_Q','post_Q','pre_dance','pre_dance','post_dance'),
-  colors = list(c('#FEFFBE','#a3c3d9'),c('#a3c3d9','#0C6291'),c('#0C6291','#E8B4BC'),
-                c('#a3c3d9','#E8B4BC'),c('#E8B4BC','#D282A6'))
-)[,timelabel := map2(t1,t2,c)] %>% 
+  label = c('control', 'quarantine', 'release', 'confirm', 'dance') %>% factor(., .),
+  t1 = c('base', 'pre_Q', 'post_Q', 'pre_Q', 'pre_dance'),
+  t2 = c('pre_Q', 'post_Q', 'pre_dance', 'pre_dance', 'post_dance'),
+  colors = list(
+    c('#FEFFBE', '#a3c3d9'),
+    c('#a3c3d9', '#0C6291'),
+    c('#0C6291', '#E8B4BC'),
+    c('#a3c3d9', '#E8B4BC'),
+    c('#E8B4BC', '#D282A6')
+  )
+)[, timelabel := map2(t1, t2, c)] %>%
   setindex(label) 
 
 myresult <- copy(info) 
@@ -230,10 +238,7 @@ myresult[,data := map2(t1,t2,\(x,y) rawdata[c(x,y),on = 'Label'])][
   
   set_dtlist_name('label')
 
-# set result column to DT makes result not visual enough 
-# so Transfer this step into the get_result function
-# but this can not get info
-# so that merge info by hand 
+
 getresult('cor_result')
 getresult('ttest_result') 
 getresult('lme_result')
@@ -246,8 +251,7 @@ ttest_result[
             ,Session := fct_drop(Session,only = NULL)]) # delete useless levels in a factor
           table = map(tabledata, my_t_table)
           .(table)
-        })]
-ttest_result[,`:=`(c('all_box','correc_box'), 
+        })][,`:=`(c('all_box','correc_box'), 
                    {
                      all = pmap(.(longdata,var,stat.test,
                                   timelabel,colors,subinfo),~my_boxplot(...,all = T))
@@ -258,8 +262,8 @@ ttest_result[,`:=`(c('all_box','correc_box'),
                    })]
 
 
-ttest_result$all_box 
-ttest_result$correc_box
+# ttest_result$all_box 
+# ttest_result$correc_box
 
 cor_result[
   ,`:=`(c('corplot','pcorplot'),
@@ -270,52 +274,26 @@ cor_result[
           .(corplot,pcorplot)
         })]
 
-myresult[, map(diff,\(x)  testcor(x))]
-testcor <- function(data) {
-  Corr(data[,-'Number'])
-}
+
 
 
 
 # Mod/Med
 
-Med <- PROCESS(dance_diff,y = 'ΔExtraversion',x = 'ΔSAQ',
-               meds=c('ΔRSES'),
-               covs = c('Age','Gender','Present'),
-               ci="boot", nsim=1000, seed=1)
-
-Mod <- PROCESS(rawdata['4'],y = 'BDI',x = 'SES',
-               mods=c('RSES'),covs = c('Age','Gender','Present'))
-
-getresult <- function(variable) {
-  # Each element may have a different length or be of a completely different type, 
-  # so it is necessary to wrap them in a list.
-  # then convert them to data.table and bind them together to look better
-  result <-  with(myresult,get(variable)) %>% 
-    map( \(x) map(x,list) %>% as.data.table()) %>% 
-    rbindlist(idcol = 'label') %>% .[,label := as.factor(label)]  %>% 
-    merge(myresult[,.SD,.SDcols = c(names(info),'var')] , . ,by = 'label') %>% 
-    .[,label := fct_drop(label,only = NULL)] %>% 
-    merge(sub_t_wide,.,by.x = 'Label',by.y = 't2')%>% 
-    # directly assign to global environment named input : 'variable' 
-    assign(variable,.,envir = .GlobalEnv)
-  
-  
-  
-  
-  # list2env(.GlobalEnv)  
-  # append(list(vars = dancevars),after = 0) 
-  return(result)
-}
+# Med <- PROCESS(dance_diff,y = 'ΔExtraversion',x = 'ΔSAQ',
+#                meds=c('ΔRSES'),
+#                covs = c('Age','Gender','Present'),
+#                ci="boot", nsim=1000, seed=1)
+# 
+# Mod <- PROCESS(rawdata['4'],y = 'BDI',x = 'SES',
+#                mods=c('RSES'),covs = c('Age','Gender','Present'))
+# 
 
 
 
 # output ------------------------------------------------------------------
 
 ttest_result[,map2(all_box,label,\(x,y) ggsave( filename =paste( y,'_allbox.tiff'),plot = x,width = 10,height = 8.5))]
-# test --------------------------------------------------------------------
-
-
 
 
 
@@ -334,18 +312,18 @@ print(doc, target = "lme_tbl.docx")
 
 # One time use ------------------------------------------------------------
 
-
-# sigtile
-
 adj.plot<- ggplot(tileplot,aes(x = vars,y = method,fill = sig))+
   geom_tile(color = 'black')+
   scale_fill_manual(values = c( "#C8C7C5","#002FA7"))+
   geom_text(aes(label = name),color ='white')+coord_flip()+
   theme( axis.title = element_text(size = 9),
          axis.text.x = element_text(size = 12))
-
-
-
+ttest_result$table
+myresult[, map(diff,\(x)  testcor(x))]
+testcor <- function(data) {
+  Corr(data[,-'Number'])
+}
+# tbl merge into one doc ####
 (testtable <- rawdata %>% 
     select(Label,Gender) %>% 
     tbl_summary(by = Label))
@@ -373,36 +351,5 @@ print(doc, target = "mytables.docx")
 
 
 
-library(flextable)
-library(officer)
 
-# 创建一个空的word_document对象
-doc <- read_docx()
-
-# 创建要输出的表格和表格标题
-table1 <- iris[1:5, 1:4] %>% regulartable()
-table2 <- mtcars[1:5, 1:4] %>% regulartable()
-table3 <- airquality[1:5, 1:4] %>% regulartable()
-table_titles <- c("Table 1", "Table 2", "Table 3")
-
-tblresult %>% set_names(paste('table',1:3,sep = ''))
-# 循环输出每个表格并加上标题
-for (i in seq_along(table_titles)) {
-  # 创建段落对象
-  p <- fp_text(bold(italic(table_titles[i])), font.size = 14)
-  # 将段落对象添加到文档对象中
-  doc <- doc %>% body_add_par(p, style = "centered")
-  # 将表格对象添加到文档对象中
-  doc <- doc %>% body_add_flextable(get(paste0("table", i)), style = "table_template")
-}
-
-# 保存文档
-print(doc, target = "output.docx")
-
-
-reset_gtsummary_theme()
-theme_gtsummary_language(language = "zh-tw")
-lang_theme <- 
-  tbl_regression(m1, exponentiate = TRUE) %>%
-  modify_caption("Language Theme (Chinese)")
 
