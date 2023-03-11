@@ -178,7 +178,7 @@ Quarantine %$%
 
 
 
-p_load(corrplot,broom,rstatix,ggpackets,broom.mixed,ggeffects,gtsummary)
+p_load(corrplot,broom,rstatix,ggpackets,broom.mixed,ggeffects,gtsummary,officer,flextable)
 # Dance -------------------------------------------------------------------
 
 # need set key on time column
@@ -246,7 +246,8 @@ ttest_result[
             ,Session := fct_drop(Session,only = NULL)]) # delete useless levels in a factor
           table = map(tabledata, my_t_table)
           .(table)
-        })][,`:=`(c('all_box','correc_box'), 
+        })]
+ttest_result[,`:=`(c('all_box','correc_box'), 
                    {
                      all = pmap(.(longdata,var,stat.test,
                                   timelabel,colors,subinfo),~my_boxplot(...,all = T))
@@ -257,7 +258,7 @@ ttest_result[
                    })]
 
 
-ttest_result$all_box
+ttest_result$all_box 
 ttest_result$correc_box
 
 cor_result[
@@ -303,7 +304,7 @@ my_boxplot <- function(longdata,var,test,timelabel,colors,subtitle,all) {
                     box.mapping = aes(fill = Session)) %+% #ggplot:: expose
       
       pack_sig(text.data = test[var], 
-               text.mapping = aes(x = 1.5,y=Inf,label = str_c('p.adj = ',p.adj)),
+               text.mapping = aes(x = 1.5,y=Inf,label = str_c('p.adj = ',p.adj),vjust = -0.1),
                text.color = ifelse(test[var]$p.adj < 0.05 & all == T,'red','black'))+
       
       facet_wrap(~vars,scales = 'free_y')+
@@ -355,7 +356,9 @@ getresult <- function(variable) {
 
 
 
+# output ------------------------------------------------------------------
 
+ttest_result[,map2(all_box,label,\(x,y) ggsave( filename =paste( y,'_allbox.tiff'),plot = x))]
 # test --------------------------------------------------------------------
 
 
@@ -363,7 +366,17 @@ getresult <- function(variable) {
 
 
 lme_result[,tbl := .(map(unlist(model,recursive = F),tbl_regression))]
-lme_tbl <- lme_result[,tbl_stack(unlist(tbl,recursive = F),group_header = var[[1]])] %>% add_q()
+lme_tbl <- lme_result[,tbl_stack(unlist(tbl,recursive = F),group_header = var[[1]])] %>% 
+  add_q() %>%  bold_p(q = T) %>% add_significance_stars() %>% 
+  as_flex_table() 
+
+doc <- read_docx() %>% 
+# 将表格插入到Word文档中
+body_add_flextable(lme_tbl)
+
+# 保存Word文档
+print(doc, target = "lme_tbl.docx")
+
 
 # One time use ------------------------------------------------------------
 
