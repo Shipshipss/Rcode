@@ -246,49 +246,52 @@ set_dtlist_name('label')
 # so Transfer this step into the get_result function
 # but this can not get info
 # so that merge info by hand 
-get_result('pcor')
-get_result('ttest_result') 
+getresult('pcor')
+getresult('ttest_result') 
 
 ttest_result[,
-             `:=`(c('data','test'), 
+             `:=`(c('boxplot'), 
                       {
 
                       #  tabledata = map2(cleandata,var, \(x,y) x[,.SD,.SDcols = c('Number','Session',y)][
                        #                    ,Session := fct_drop(Session,only = NULL)])
                      #  table = map(tabledata, my_t_table)
-                        data = map(longdata,sig.vars.fdr, \(x,y) x[y])
-                        test = map(stat.test,sig.vars.fdr, \(x,y) x[y])
-                      #  boxplot = map2(data,test,my_boxplot)
+                       
+                        boxplot = pmap(.(longdata,sig.vars.fdr,stat.test),my_boxplot)
                        # boxplot = map(longdata, \(x)
                        #               ggplot(x,aes(Label,value))+
                        #                 geom_boxplot()+facet_wrap(~vars,scales = 'free_y')
                        #                 )
-                        .(data,test)
+                        .(boxplot)
                       })]
-ttest_result$plot
+ttest_result$boxplot
 ttest_result$longdata
 
-ttest_result[,plot:=map2(longdata,sig.vars.fdr, \(x,y)
+ttest_result[,plot:=map2(longdata,var, \(x,y)
                         ggplot(data = x[y],aes(Session,value))+
                           geom_boxplot()+
-                          facet_wrap(~x$vars,scales = 'free_y'))]
-
-a <- ttest_result %>% 
-  mutate(plot = map2(longdata,sig.vars.fdr, \(x,y) 
-                     ggplot(data = x[y], aes(Session,value))+
-                      geom_boxplot()+facet_wrap(~vars,scales = 'free_y')))
+                          facet_wrap(~vars,scales = 'free_y'))]
     #  ggtitle(glue("Number of Cylinder: {.y}")) +
-a$plot
 
-my_boxplot <- function(data,test) {
+
+snk.a <- ttest_result$longdata
+nec.a <- ttest_result$sig.vars.fdr
+
+map(snk.a,nec.a, \(x,y) ggplot(x[y],aes(Session,value))+geom_boxplot()+facet_wrap(~vars,scales = 'free_y'))
+map(snk.a,nec.a, \(x,y) unlist(x,recursive = F)[y])
+map(snk.a,nec.a, \(x,y) x[c(y)])
+
+map(snk.a,'vars')
+
+my_boxplot <- function(longdata,var,test) {
+  stopifnot(length(var) != 0)
   
-  
-  ggplot(data,aes(Session,value))+
+  ggplot(longdata[var],aes(Session,value))+
     
     pack_geom_box(line.mapping = aes(group = Number),
                   box.mapping = aes(fill = Session)) %+% #ggplot:: expose
     
-    pack_sig(text.data = test, 
+    pack_sig(text.data = test[var], 
              text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.adj)))+
     
     facet_wrap(~vars,scales = 'free_y')+
