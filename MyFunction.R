@@ -11,7 +11,7 @@ pack_sig <- function(...) {
   #Same geom only use once, otherwise can't find aes
   ggpacket() %+%
     geom_line(.id = c('all','line'),color = 'black', linewidth = 0.5,alpha = 0.5,...) %+%
-    geom_text(.id = c('all','text'),size =3,fontface = 'bold',vjust = 1,...) 
+    geom_text(.id = c('all','text'),size =3,fontface = 'bold',vjust = 1.2,...) 
 }
 
 pack_scale <-  function(...) {
@@ -344,3 +344,49 @@ my_pcorplot <- function(pcor,pcor.test) {
   return(plot)
 }
 
+my_boxplot <- function(longdata,var,test,timelabel,colors,subtitle,all) {
+  
+  title = if_else(all == T,"Paired t-test for all variables",
+                  "Paired t-test for all variables passing multiple corrections")
+  
+  # strvar <- as_name(quote(var))
+  # 
+  # dotn <- str_count(strvar, "\\.")
+  # 
+  # title = case_when(
+  #   dotn == 0 ~ "Paired t-test for all variables",
+  #   dotn == 1 ~ "Paired t-test for all significant variables (no corrections)",
+  #   dotn == 2 ~ "Paired t-test for all variables passing multiple corrections",
+  # )
+  # 
+  # if(dotn == 2){
+  #   correct = str_split_1(strvar,'\\.')[3]
+  # }
+  
+  if(length(var) == 0 ){
+    NULL
+  } else
+  {
+    ggplot(longdata[var],aes(Session,value))+
+      
+      pack_geom_box(line.mapping = aes(group = Number),
+                    box.mapping = aes(fill = Session)) %+% #ggplot:: expose
+      
+      pack_sig(text.data = test[var], 
+               text.mapping = aes(x = 1.5,y=Inf,label = str_c('p.adj = ',p.adj)),
+               text.color = ifelse(test[var]$p.adj < 0.05 & all == T,'red','black'))+
+      
+      facet_wrap(~vars,scales = 'free_y')+
+      
+      scale_x_discrete(labels = timelabel)+
+      #  scale_fill_brewer(palette = 'Set1')+
+      scale_fill_manual(values  = colors)+
+      theme_bw()+theme(axis.title = element_blank())+
+      labs(title = title,
+           subtitle = str_c(subtitle,"Correction method: FDR",sep = ',  '))+
+      pack_theme(theme.legend.position='none')
+    
+    
+    
+  }
+}
