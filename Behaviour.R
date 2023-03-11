@@ -1,7 +1,7 @@
 Sys.setenv(LANGUAGE = "en")
-Sys.setenv(OPENAI_API_KEY = "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")
+#Sys.setenv(OPENAI_API_KEY = "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")
 p_load(bruceR,psych,purrr,pacman,magrittr)
-
+#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
 
 library(forcats)
 library(gghighlight)
@@ -90,9 +90,11 @@ rawdata %>%
 
 (sub_number <- subject[ ,map(.SD,\(x) map_int(x,length)),by = .(Label,Gender)])
 
-sub_wide <- sub_number %>% 
-  dcast(Label ~ Gender,value.var = 'sub') %>% 
-  .[,all := Male + Female]
+(sub_t_wide <- sub_number %>% 
+    dcast(Label ~ Gender,value.var = c('keep')) %>% 
+    .[,allkeep := Male + Female] %>% 
+    .[,subinfo:= pmap(.(allkeep,Male,Female), 
+                      \(x,y,z) glue( 'N = {x}', 'Male = {y}', 'Female = {z}', .sep = ', '))])
 
 #cleandata <- datanew[CJ(c(t1,t2),samesub)]
 
@@ -100,15 +102,15 @@ sub_wide <- sub_number %>%
 
 #All diff on each adjacent time point —— diff 
 (diff <- setorderv(rawdata,'Session')[,paste('Δ',vars,sep = ''):= map(.SD,\(x) x - shift(x) ),
-    by = Number,.SDcols = vars] %>% print())
+                                      by = Number,.SDcols = vars] %>% print())
 # Correlation ---------------------------------------------------------------------
 
 #select( where(\(x) !any(is.na(x)) )) 
 # need to convert Gender variable to numeric class before calculation of corr 
 
-  # setnames(c('ΔGSES','ΔRSES','ΔSES_em','ΔExtraversion',
-  #            'ΔEmotionality',),
-  #          c('ΔGSE','ΔRSE','ΔSES','ΔExt','ΔEmo'))
+# setnames(c('ΔGSES','ΔRSES','ΔSES_em','ΔExtraversion',
+#            'ΔEmotionality',),
+#          c('ΔGSE','ΔRSE','ΔSES','ΔExt','ΔEmo'))
 
 
 (cordata <- diff['pre_dance',.SD,.SDcols = patterns('^Δ'),on = 'Label',by = con.vars] %>% 
@@ -132,21 +134,6 @@ D.corplot <- corrplot(D.cor$r,p.mat = D.cor$p,
 
 
 mytest[c("control", "release", "dance"),map(pcor,my_corplot),on='label']
-
-my_corplot <- function(x) {
- pcor <-  with(x, get('pcor'))
- pcor.test <-  with(x, get('pcor.test'))
- plot <- corrplot(pcor,p.mat = pcor.test$p,
-                  method="square", type = 'l',
-                  insig = 'blank',
-                  addCoef.col = 'white',number.cex = 0.5,
-                  tl.pos = 'd',tl.srt = 0,tl.col='black',tl.cex = 0.6,tl.offset = 0.1,
-                  # cl.pos = 'n', # remove color bar
-                  # bg = 'color1',addgrid.col = 'color2',
-                  col = COL2('BrBG'))
- return(plot)
-}
-
 
 
 # Quarantine --------------------------------------------------------------
@@ -199,8 +186,10 @@ p_load(corrplot,broom,rstatix,ggpackets,broom.mixed,ggeffects,gtsummary)
 # which contain t1 and t2 value
 info <- data.table(
   label = c('control','quarantine','release','confirm','dance') %>% factor(.,.),
-  t1 = list('base','pre_Q','post_Q','pre_Q','pre_dance'),
-  t2 = list('pre_Q','post_Q','pre_dance','pre_dance','post_dance')
+  t1 = c('base','pre_Q','post_Q','pre_Q','pre_dance'),
+  t2 = c('pre_Q','post_Q','pre_dance','pre_dance','post_dance'),
+  colors = list(c('#FEFFBE','#a3c3d9'),c('#a3c3d9','#0C6291'),c('#0C6291','#E8B4BC'),
+                c('#a3c3d9','#E8B4BC'),c('#E8B4BC','#D282A6'))
 )[,timelabel := map2(t1,t2,c)] %>% 
   setindex(label) 
 
@@ -219,13 +208,13 @@ myresult[,data := map2(t1,t2,\(x,y) rawdata[c(x,y),on = 'Label'])][
          })][
            
            c("control", "release", "dance"),
-           `:=`(c('pcor','ttest_result'), 
+           `:=`(c('cor_result','ttest_result'), 
                 {
-                  pcor = map2(diff,var,\(x,y)  my_pcor(x,str_c('Δ',y),con.vars))
+                  cor_result = map2(diff,var,\(x,y)  my_cor_pcor(x,str_c('Δ',y),con.vars))
                   
                   ttest_result = pmap(list(data,var,t2),my_ttest) # t2 argument to set ref group
-
-                  .(pcor,ttest_result)
+                  
+                  .(cor_result,ttest_result)
                 })
            ,on = 'label'][
              
@@ -239,78 +228,99 @@ myresult[,data := map2(t1,t2,\(x,y) rawdata[c(x,y),on = 'Label'])][
                       .(lme_result)
                     })
                , on = 'label'] %>% 
-
-set_dtlist_name('label')
+  
+  set_dtlist_name('label')
 
 # set result column to DT makes result not visual enough 
 # so Transfer this step into the get_result function
 # but this can not get info
 # so that merge info by hand 
-getresult('pcor')
+getresult('cor_result')
 getresult('ttest_result') 
-
-ttest_result[,
-             `:=`(c('boxplot'), 
-                      {
-
-                      #  tabledata = map2(cleandata,var, \(x,y) x[,.SD,.SDcols = c('Number','Session',y)][
-                       #                    ,Session := fct_drop(Session,only = NULL)])
-                     #  table = map(tabledata, my_t_table)
-                       
-                        boxplot = pmap(.(longdata,sig.vars.fdr,stat.test),my_boxplot)
-                       # boxplot = map(longdata, \(x)
-                       #               ggplot(x,aes(Label,value))+
-                       #                 geom_boxplot()+facet_wrap(~vars,scales = 'free_y')
-                       #                 )
-                        .(boxplot)
-                      })]
-ttest_result$boxplot
-ttest_result$longdata
-
-ttest_result[,plot:=map2(longdata,var, \(x,y)
-                        ggplot(data = x[y],aes(Session,value))+
-                          geom_boxplot()+
-                          facet_wrap(~vars,scales = 'free_y'))]
-    #  ggtitle(glue("Number of Cylinder: {.y}")) +
+getresult('lme_result')
 
 
-snk.a <- ttest_result$longdata
-nec.a <- ttest_result$sig.vars.fdr
+ttest_result[
+  ,`:=`(c('table'), 
+        {
+          tabledata = map2(cleandata,var, \(x,y) x[,.SD,.SDcols = c('Number','Session',y)][
+            ,Session := fct_drop(Session,only = NULL)]) # delete useless levels in a factor
+          table = map(tabledata, my_t_table)
+          .(table)
+        })][,`:=`(c('all_box','correc_box'), 
+                   {
+                     all = pmap(.(longdata,var,stat.test,
+                                  timelabel,colors,subinfo),~my_boxplot(...,all = T))
+                     
+                     correc = pmap(.(longdata,sig.vars.fdr,stat.test,
+                                     timelabel,colors,subinfo),~my_boxplot(...,all = F))
+                     .(all,correc)
+                   })]
 
-map(snk.a,nec.a, \(x,y) ggplot(x[y],aes(Session,value))+geom_boxplot()+facet_wrap(~vars,scales = 'free_y'))
-map(snk.a,nec.a, \(x,y) unlist(x,recursive = F)[y])
-map(snk.a,nec.a, \(x,y) x[c(y)])
 
-map(snk.a,'vars')
+ttest_result$all_box
+ttest_result$correc_box
 
-my_boxplot <- function(longdata,var,test) {
-  stopifnot(length(var) != 0)
-  
-  ggplot(longdata[var],aes(Session,value))+
-    
-    pack_geom_box(line.mapping = aes(group = Number),
-                  box.mapping = aes(fill = Session)) %+% #ggplot:: expose
-    
-    pack_sig(text.data = test[var], 
-             text.mapping = aes(x = 1.5,y=Inf,label = str_c('p = ',p.adj)))+
-    
-    facet_wrap(~vars,scales = 'free_y')+
-    #    scale_x_discrete(labels = timelabel)+
-    #   scale_fill_brewer(palette = 'Set1')+
-  #  pack_scale(all.labels = levels(timelabel),
- #              fill.palette = 'Set1')+
-    theme_bw()+theme(axis.title = element_blank())+
-    #   labs(title = 'Significant variable PLOT on paired t-test',
-    #       subtitle = 'N = 19 (F:10 / M:9)')+
-    pack_theme(theme.legend.position='none')
+cor_result[
+  ,`:=`(c('corplot','pcorplot'),
+        {
+          corplot = map(cor,my_corplot)
+          
+          pcorplot = map2(pcor,pcor.test,my_pcorplot)
+          .(corplot,pcorplot)
+        })]
+
+myresult[, map(diff,\(x)  testcor(x))]
+testcor <- function(data) {
+  Corr(data[,-'Number'])
 }
 
+my_boxplot <- function(longdata,var,test,timelabel,colors,subtitle,all) {
+
+  title = if_else(all == T,"Paired t-test for all variables",
+                  "Paired t-test for all variables passing multiple corrections")
+  
+  # strvar <- as_name(quote(var))
+  # 
+  # dotn <- str_count(strvar, "\\.")
+  # 
+  # title = case_when(
+  #   dotn == 0 ~ "Paired t-test for all variables",
+  #   dotn == 1 ~ "Paired t-test for all significant variables (no corrections)",
+  #   dotn == 2 ~ "Paired t-test for all variables passing multiple corrections",
+  # )
+  # 
+  # if(dotn == 2){
+  #   correct = str_split_1(strvar,'\\.')[3]
+  # }
+  
+  if(length(var) == 0 ){
+    NULL
+  } else
+  {
+   ggplot(longdata[var],aes(Session,value))+
+      
+      pack_geom_box(line.mapping = aes(group = Number),
+                    box.mapping = aes(fill = Session)) %+% #ggplot:: expose
+      
+      pack_sig(text.data = test[var], 
+               text.mapping = aes(x = 1.5,y=Inf,label = str_c('p.adj = ',p.adj)),
+               text.color = ifelse(test[var]$p.adj < 0.05 & all == T,'red','black'))+
+      
+      facet_wrap(~vars,scales = 'free_y')+
+      
+      scale_x_discrete(labels = timelabel)+
+      #  scale_fill_brewer(palette = 'Set1')+
+      scale_fill_manual(values  = colors)+
+      theme_bw()+theme(axis.title = element_blank())+
+      labs(title = title,
+           subtitle = str_c(subtitle,"Correction method: FDR",sep = ',  '))+
+      pack_theme(theme.legend.position='none')
+  
 
 
-
-
-
-
+  }
+}
 
 
 # Mod/Med
@@ -332,11 +342,14 @@ getresult <- function(variable) {
     rbindlist(idcol = 'label') %>% .[,label := as.factor(label)]  %>% 
     merge(myresult[,.SD,.SDcols = c(names(info),'var')] , . ,by = 'label') %>% 
     .[,label := fct_drop(label,only = NULL)] %>% 
-    # directly assign to global environment named input : 'variable'
+    merge(sub_t_wide,.,by.x = 'Label',by.y = 't2')%>% 
+    # directly assign to global environment named input : 'variable' 
     assign(variable,.,envir = .GlobalEnv)
   
-  # list2env(.GlobalEnv)  
   
+  
+  
+  # list2env(.GlobalEnv)  
   # append(list(vars = dancevars),after = 0) 
   return(result)
 }
@@ -347,14 +360,14 @@ getresult <- function(variable) {
 # test --------------------------------------------------------------------
 
 
-setattr(myresult$ttest_result,'analysis','paired-t')
-get_rownames <- attr_getter("analysis")
-get_rownames(myresult)
 
 
+tbllist <- lme_result$model %>% unlist(recursive = F) %>% map(tbl_regression)
+tbl_stack(tbllist,)
 
-
-
+lme_result[,tbl := .(map(unlist(model,recursive = F),tbl_regression))]
+lme_result[,tbl_stack(unlist(tbl,recursive = F),group_header = var[[1]])]
+lme_result[,]
 # One time use ------------------------------------------------------------
 
 
@@ -370,8 +383,8 @@ adj.plot<- ggplot(tileplot,aes(x = vars,y = method,fill = sig))+
 
 
 (testtable <- rawdata %>% 
-  select(Label,Gender) %>% 
-  tbl_summary(by = Label))
+    select(Label,Gender) %>% 
+    tbl_summary(by = Label))
 
 tf <- tempfile(fileext = ".docx")
 tblresult %>% save_as_docx(path = "/Users/ship/Documents/Code/Rcode",)
@@ -380,7 +393,7 @@ tblresult %>% save_as_docx(path = "/Users/ship/Documents/Code/Rcode",)
 tblresult <- myresult$t_table %>% map_if(is.list,as_flex_table)
 
 # 将表格插入到Word文档中
- accumulate(tblresult,\(x) body_add_docx(doc, x))
+accumulate(tblresult,\(x) body_add_docx(doc, x))
 doc <- body_add_flextable(doc, table2)
 
 # 创建要插入的表格

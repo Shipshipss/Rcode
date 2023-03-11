@@ -29,7 +29,7 @@ pack_theme <-  function(...) {
           strip.background = element_blank(),
           strip.text.x = element_text(face = 'bold',size = 10),
           panel.spacing.x = grid::unit(0.5,'lines'),
-          panel.spacing.y = grid::unit(0,'lines'),
+          panel.spacing.y = grid::unit(0.5,'lines'),
           
           legend.position = 'bottom',
           
@@ -169,10 +169,12 @@ my_ttest <- function(data,variable,ref,p.adj.method = 'fdr') {
     t_test(value ~ Label, paired = TRUE,ref.group = ref) %>%
     adjust_pvalue(method = p.adj.method) %>%
     add_significance() %>% 
-    setDT(key = 'vars')
+    setDT(key = 'vars') %>% 
+    modify_if(is.numeric,\(x) round(x,3)) 
   
   #correction
-  sig.vars.nocor <- stat.test[p < 0.05,vars] %>% as.character()
+  corre.met <- p.adj.method
+  sig.vars <- stat.test[p < 0.05,vars] %>% as.character()
   sig.vars.cor <- stat.test[p.adj.signif !='ns',vars] %>% as.character()
   
   # c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY",
@@ -183,9 +185,9 @@ my_ttest <- function(data,variable,ref,p.adj.method = 'fdr') {
   # table = my_t_table(tabledata)
   
   names <-  c('sub','cleandata',"longdata", "stat.test", 
-              "sig.vars.nocor", str_c('sig.vars.',p.adj.method))
+              "sig.vars", str_c('sig.vars.',p.adj.method),'corre.met')
   # dont forget to add names and return to save tbl or plot in ttest_result
-  return(setNames(list(sub, cleandata, longdata, stat.test, sig.vars.nocor, sig.vars.cor),names))
+  return(setNames(list(sub, cleandata, longdata, stat.test, sig.vars, sig.vars.cor,corre.met),names))
   
 }
 
@@ -236,12 +238,13 @@ my_t_table <- function(data) {
 my_cor_pcor <- function(data,vars,control) {
   
   cor <- corr.test(data[,-'Number'])
+
   
   N =  uniqueN(data,by = 'Number')
   # corr.p may be applied to the results of partial.r if n is set to n - s 
   # (where s is the number of variables partialed out)
   pcor <- partial.r(data,c(vars),control)
-  pcor.test <- corr.p(pcor,n = N)
+  pcor.test <- corr.p(pcor,n = N,adjust = 'fdr')
   
   names <- c('cor',"pcor", "pcor.test")
   return(setNames(list(cor,pcor, pcor.test), names))
@@ -314,5 +317,30 @@ my_boxplot <- function(label) {
         #         subtitle = 'N = 19 (F:10 / M:9)')+
         pack_theme(theme.legend.position='none')
     }
+}
+
+my_corplot <- function(cor) {
+  
+  plot <- corrplot(cor$r,p.mat = cor$p,
+                   method="square", type = 'u',
+                   insig = 'blank',
+                   addCoef.col = 'white',number.cex = 1,
+                   tl.pos = 'd',tl.srt = 0,tl.col='black',tl.cex = 0.6,tl.offset = 0.1,
+                   # cl.pos = 'n', # remove color bar
+                   # bg = 'color1',addgrid.col = 'color2',
+                   col = COL2('BrBG'))
+  return(plot)
+}
+my_pcorplot <- function(pcor,pcor.test) {
+  
+  plot <- corrplot(pcor,p.mat = pcor.test$p,
+                   method="square", type = 'l',
+                   insig = 'blank',
+                   addCoef.col = 'white',number.cex = 1,
+                   tl.pos = 'd',tl.srt = 0,tl.col='black',tl.cex = 0.6,tl.offset = 0.1,
+                   # cl.pos = 'n', # remove color bar
+                   # bg = 'color1',addgrid.col = 'color2',
+                   col = COL2('BrBG'))
+  return(plot)
 }
 
