@@ -51,7 +51,7 @@ setindex(rawdata, Label, Number)
 
 #vars
 
-vars <- rawdata[, SES_em:Attitude] %>% names()
+vars <- rawdata[, SES_em:Attitude] %>% names() %>% .[-'SES']
 Qaddvars <- c('A1', 'A2', 'A3', 'Attitude', 'ISI', 'IES')
 Qvars = c('SEAQ', 'LSA', 'PCS', 'MCS', 'BAI', 'BDI')
 con.vars <- c('Age', 'Gender', 'Attendance')
@@ -312,12 +312,28 @@ print(doc, target = "lme_tbl.docx")
 
 # One time use ------------------------------------------------------------
 
+
+
+tiledata <- map(list(ttest_result,lme_result),\(x) x[['sig.vars.fdr']]) %>% unlist(recursive = F) %>% 
+  map(\(x) dancevars %in% x) %>% as.data.table() %>% .[,var := dancevars]
+
+
+c('var',str_c(as.character(ttest_result$label),'_ttest'),'release_lme') %>% 
+  setnames(tiledata,.)
+
+ttest_result[, map(sig.vars.fdr, \(x) dancevars %in% x) ]%>% 
+  setnames(str_c(as.character(ttest_result$label),'_ttest'))
+
+dancevars %in% lme_result$sig.vars.fdr[[1]] 
+
 adj.plot<- ggplot(tileplot,aes(x = vars,y = method,fill = sig))+
   geom_tile(color = 'black')+
   scale_fill_manual(values = c( "#C8C7C5","#002FA7"))+
   geom_text(aes(label = name),color ='white')+coord_flip()+
   theme( axis.title = element_text(size = 9),
          axis.text.x = element_text(size = 12))
+
+
 ttest_result$table
 myresult[, map(diff,\(x)  testcor(x))]
 testcor <- function(data) {
@@ -352,4 +368,27 @@ print(doc, target = "mytables.docx")
 
 
 
+Atte <- Attendance[,sub:=ifelse(Number %in% c('15','36','40','46','47'),'quit','keep')][
+  ,Attendance:=as.factor(Attendance)] 
 
+
+
+
+Atte.plot <- ggplot(Atte, aes(x = Attendance, fill = sub)) +
+  geom_bar() +
+  geom_text(aes(label = after_stat(count)), stat = "count", 
+            position = position_stack(vjust = 0.5), color = "white", size = 5, fontface = "bold") +
+  labs(title = 'Attendance of Dance Intervention Participants', 
+       subtitle = "Number of dance classes: 5",
+       x = "Frequency of attendance", 
+       y = "Headcount",
+       fill = "") +
+  scale_fill_brewer(palette = "Set1") + 
+  theme_bw() +
+  theme(plot.title = element_text(size = 13, face = "bold"), 
+        plot.subtitle = element_text(size = 11, face = "bold"), 
+        axis.text = element_text(size = 10, face = "bold"), 
+        axis.title = element_text(size = 10, face = "bold")) +
+  geom_label(x = 1.8, y = 12, label = "N = 24, keep = 19, quit = 5", 
+             size = 15, fontface = "bold", 
+             color = "black", fill = "white")
