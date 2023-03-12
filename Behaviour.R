@@ -318,34 +318,30 @@ tiledata <- map(list(ttest_result,lme_result),\(x) x[['sig.vars.fdr']]) %>% unli
   map(\(x) dancevars %in% x) %>% as.data.table() %>% .[,var := dancevars]
 
 
-c('var',str_c(as.character(ttest_result$label),'_ttest'),'release_lme') %>% 
-  setnames(tiledata,.)
+(c(str_c(as.character(ttest_result$label),'_ttest'),'release_lme','var') %>% 
+  setnames(tiledata,.))
+
+tiledata %<>% 
+setorderv('dance_ttest',order = -1) %>% 
+   melt( id.vars = 'var',variable.name = 'method',
+        value.name = 'sig')
+tiledata[,name:=ifelse(sig == T,var,'')]                      
 
 ttest_result[, map(sig.vars.fdr, \(x) dancevars %in% x) ]%>% 
   setnames(str_c(as.character(ttest_result$label),'_ttest'))
 
 dancevars %in% lme_result$sig.vars.fdr[[1]] 
 
-adj.plot<- ggplot(tileplot,aes(x = vars,y = method,fill = sig))+
-  geom_tile(color = 'black')+
-  scale_fill_manual(values = c( "#C8C7C5","#002FA7"))+
-  geom_text(aes(label = name),color ='white')+coord_flip()+
-  theme( axis.title = element_text(size = 9),
-         axis.text.x = element_text(size = 12))
 
 
-ttest_result$table
+
+
 myresult[, map(diff,\(x)  testcor(x))]
 testcor <- function(data) {
   Corr(data[,-'Number'])
 }
-# tbl merge into one doc ####
-(testtable <- rawdata %>% 
-    select(Label,Gender) %>% 
-    tbl_summary(by = Label))
 
-tf <- tempfile(fileext = ".docx")
-tblresult %>% save_as_docx(path = "/Users/ship/Documents/Code/Rcode",)
+# tbl merge into one doc ####
 
 
 tblresult <- myresult$t_table %>% map_if(is.list,as_flex_table)
@@ -366,12 +362,26 @@ doc <- body_add_flextable(doc, table2)
 print(doc, target = "mytables.docx")
 
 
-
+# info output ####
 
 Atte <- Attendance[,sub:=ifelse(Number %in% c('15','36','40','46','47'),'quit','keep')][
   ,Attendance:=as.factor(Attendance)] 
 
 
+#sig.plot <- 
+  ggplot(tiledata,aes(x = var,y = method,fill = sig))+
+  geom_tile(color = 'black')+
+  scale_fill_manual(values = c( "#C8C7C5","#002FA7"))+
+  geom_text(aes(label = name),color ='white')+coord_flip()+
+  labs(title = 'All-period results using paired t-test and linear mixed model', 
+       subtitle = "Correction method : False Discovery Rate ",
+       x = "", 
+       y = "") +
+    theme_cowplot() +
+  theme(plot.title = element_text(size = 13, face = "bold"), 
+        plot.subtitle = element_text(size = 11, face = "bold"), 
+        axis.text = element_text(size = 10, face = "bold"), 
+        axis.title = element_text(size = 10, face = "bold"))
 
 
 Atte.plot <- ggplot(Atte, aes(x = Attendance, fill = sub)) +
@@ -381,14 +391,21 @@ Atte.plot <- ggplot(Atte, aes(x = Attendance, fill = sub)) +
   labs(title = 'Attendance of Dance Intervention Participants', 
        subtitle = "Number of dance classes: 5",
        x = "Frequency of attendance", 
-       y = "Headcount",
-       fill = "") +
-  scale_fill_brewer(palette = "Set1") + 
-  theme_bw() +
-  theme(plot.title = element_text(size = 13, face = "bold"), 
+       y = "Headcount") +
+  scale_fill_manual(values = c( "#002FA7","#C8C7C5")) + 
+  theme_cowplot() +
+  theme(legend.text = element_text(size = 13, color = "black", face = "bold"),
+    legend.title= element_blank(),
+    legend.position = c(0.1, 0.9),
+    legend.direction = "horizontal",
+        legend.box = "horizontal",
+        legend.background = element_rect(fill = "white", color = "white"),
+    plot.title = element_text(size = 13, face = "bold"), 
         plot.subtitle = element_text(size = 11, face = "bold"), 
         axis.text = element_text(size = 10, face = "bold"), 
         axis.title = element_text(size = 10, face = "bold")) +
   geom_label(x = 1.8, y = 12, label = "N = 24, keep = 19, quit = 5", 
              size = 15, fontface = "bold", 
              color = "black", fill = "white")
+
+plot_grid(list(Atte.plot+sig.plot)) 
