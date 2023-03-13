@@ -368,8 +368,7 @@ Atte <- Attendance[,sub:=ifelse(Number %in% c('15','36','40','46','47'),'quit','
   ,Attendance:=as.factor(Attendance)] 
 
 
-#sig.plot <- 
-  ggplot(tiledata,aes(x = var,y = method,fill = sig))+
+sig.plot <- ggplot(tiledata,aes(x = var,y = method,fill = sig))+
   geom_tile(color = 'black')+
   scale_fill_manual(values = c( "#C8C7C5","#002FA7"))+
   geom_text(aes(label = name),color ='white')+coord_flip()+
@@ -377,7 +376,7 @@ Atte <- Attendance[,sub:=ifelse(Number %in% c('15','36','40','46','47'),'quit','
        subtitle = "Correction method : False Discovery Rate ",
        x = "", 
        y = "") +
-    theme_cowplot() +
+    theme_bruce() +
   theme(plot.title = element_text(size = 13, face = "bold"), 
         plot.subtitle = element_text(size = 11, face = "bold"), 
         axis.text = element_text(size = 10, face = "bold"), 
@@ -393,7 +392,7 @@ Atte.plot <- ggplot(Atte, aes(x = Attendance, fill = sub)) +
        x = "Frequency of attendance", 
        y = "Headcount") +
   scale_fill_manual(values = c( "#002FA7","#C8C7C5")) + 
-  theme_cowplot() +
+  theme_bruce() +
   theme(legend.text = element_text(size = 13, color = "black", face = "bold"),
     legend.title= element_blank(),
     legend.position = c(0.1, 0.9),
@@ -408,4 +407,6 @@ Atte.plot <- ggplot(Atte, aes(x = Attendance, fill = sub)) +
              size = 15, fontface = "bold", 
              color = "black", fill = "white")
 
+ggsave('Atte.tiff',Atte.plot,width = 10,height = 8)
+ggsave('sig.tiff',sig.plot,width = 10,height = 8)
 plot_grid(list(Atte.plot+sig.plot)) 
